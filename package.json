@@ -7,6 +7,6 @@
   "author": "Info Teddy",
   "dependencies": {
     "discord-webhook-node": "^1.1.8",
-    "octokit": "^2.0.14"
+    "octokit": "^2.1.0"
   }
 }

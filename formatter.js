@@ -2,7 +2,7 @@
 
 import { MessageBuilder } from 'discord-webhook-node';
 
-const BASE = 'https://github.com';
+const BASE = 'https://github.com";
 
 function truncateString(string, length) {
   if (!string) {
@@ -17,49 +17,50 @@ function truncateString(string, length) {
   return string.substr(0, string.lastIndexOf(' ')) + ' ...';
 }
 
-
 export function formatPushEvent(eventObj) {
-  const message = new MessageBuilder()
-    .setColor('#7289da');
-
-  // expecting eventObj.repo.name === "TerryCavanagh/VVVVVV"
-  const repoName = eventObj.repo.name.split('/')[1];
-  // expecting eventObj.payload.ref === "refs/heads/master"
+  const repoFullName = eventObj.repo.name; // e.g., "TerryCavanagh/VVVVVV"
+  const repoName = repoFullName.split('/')[1];
   const branchName = eventObj.payload.ref.split('/')[2];
-  const newCommits = eventObj.payload.commits.length === 1 ?
-    "1 new commit" :
-    `${eventObj.payload.commits.length} new commits`;
+  const commitCount = eventObj.payload.commits.length;
+  const newCommits = commitCount === 1 ? "1 new commit" : `${commitCount} new commits`;
 
-  message.setTitle(`[${repoName}:${branchName}] ${newCommits}`)
-    .setAuthor(eventObj.actor.login, eventObj.actor.avatar_url, `${BASE}/${eventObj.actor.login}`);
+  const compareUrl = `${BASE}/${repoFullName}/compare/${eventObj.payload.before.substring(0, 12)}...${eventObj.payload.head.substring(0, 12)}`;
 
-  var embedUrl = '';
-  var lines = [];
-  for (const commit of eventObj.payload.commits) {
-    if (lines.length >= 5) {
-      break;
-    }
+  const message = new MessageBuilder()
+    .setColor('#7289da')
+    .setTitle(`🚀 Push to \`${branchName}\` (${newCommits})`)
+    .setAuthor(eventObj.actor.login, eventObj.actor.avatar_url, `${BASE}/${eventObj.actor.login}`)
+    .setTimestamp();
 
-    const shortSha = commit.sha.substr(0, 7);
-    const url = `${BASE}/${eventObj.repo.name}/commit/${commit.sha}`;
-    const title = truncateString(commit.message.split('\n')[0], 50);
-    lines.push(`[\`${shortSha}\`](${url}) ${title} - ${commit.author.name}`);
+  const lines = [];
+  let embedUrl = '';
 
-    if (eventObj.payload.commits.length === 1) {
-      embedUrl = url;
+  for (const commit of eventObj.payload.commits.slice(0, 5)) {
+    const shortSha = commit.sha.substring(0, 7);
+    const commitUrl = `${BASE}/${repoFullName}/commit/${commit.sha}`;
+    const title = truncateString(commit.message.split('\n')[0], 72);
+    const author = commit.author?.name || 'Unknown';
+
+    lines.push(`• [\`${shortSha}\`](${commitUrl}) ${title} — _${author}_`);
+
+    if (commitCount === 1) {
+      embedUrl = commitUrl;
     }
   }
 
-  if (eventObj.payload.commits.length === 1) {
+  if (commitCount === 1) {
     message.setURL(embedUrl);
   } else {
-    message.setURL(`${BASE}/${eventObj.repo.name}/compare/${eventObj.payload.before.substr(0, 12)}...${eventObj.payload.head.substr(0, 12)}`);
+    message.setURL(compareUrl);
   }
 
   message.setDescription(lines.join('\n'));
 
+  message.setFooter(`Pushed by ${eventObj.actor.login}`);
+
   return message;
 }
+
 
 export function formatIssuesEvent(eventObj) {
   switch (eventObj.payload.action) {
@@ -74,36 +75,41 @@ export function formatIssuesEvent(eventObj) {
 }
 
 function formatIssueOpenedEvent(eventObj) {
-  const title = truncateString(eventObj.payload.issue.title, 150);
-
+  const title = truncateString(eventObj.payload.issue.title, 100);
   const message = new MessageBuilder()
     .setColor('#eb6420')
-    .setTitle(`[${eventObj.repo.name}] Issue opened: #${eventObj.payload.issue.number} ${title}`)
+    .setTitle(`🆕 Issue opened: #${eventObj.payload.issue.number} - **${title}**`)
     .setAuthor(eventObj.actor.login, eventObj.actor.avatar_url, `${BASE}/${eventObj.actor.login}`)
     .setURL(eventObj.payload.issue.html_url)
-    .setDescription(truncateString(eventObj.payload.issue.body, 500));
+    .setDescription(truncateString(eventObj.payload.issue.body, 200))
+    .setTimestamp()
+    .setFooter(`Created by ${eventObj.actor.login}`);
 
   return message;
 }
 
 function formatIssueClosedEvent(eventObj) {
-  const title = truncateString(eventObj.payload.issue.title, 150);
-
+  const title = truncateString(eventObj.payload.issue.title, 100);
   const message = new MessageBuilder()
-    .setTitle(`[${eventObj.repo.name}] Issue closed: #${eventObj.payload.issue.number} ${title}`)
+    .setColor('#e1e1e1')
+    .setTitle(`🔒 Issue closed: #${eventObj.payload.issue.number} - **${title}**`)
     .setAuthor(eventObj.actor.login, eventObj.actor.avatar_url, `${BASE}/${eventObj.actor.login}`)
-    .setURL(eventObj.payload.issue.html_url);
+    .setURL(eventObj.payload.issue.html_url)
+    .setTimestamp()
+    .setFooter(`Closed by ${eventObj.actor.login}`);
 
   return message;
 }
 
 function formatIssueReopenedEvent(eventObj) {
-  const title = truncateString(eventObj.payload.issue.title, 150);
-
+  const title = truncateString(eventObj.payload.issue.title, 100);
   const message = new MessageBuilder()
-    .setTitle(`[${eventObj.repo.name}] Issue reopened: #${eventObj.payload.issue.number} ${title}`)
+    .setColor('#f7b824')
+    .setTitle(`🔄 Issue reopened: #${eventObj.payload.issue.number} - **${title}**`)
     .setAuthor(eventObj.actor.login, eventObj.actor.avatar_url, `${BASE}/${eventObj.actor.login}`)
-    .setURL(eventObj.payload.issue.html_url);
+    .setURL(eventObj.payload.issue.html_url)
+    .setTimestamp()
+    .setFooter(`Reopened by ${eventObj.actor.login}`);
 
   return message;
 }
@@ -120,37 +126,43 @@ export function formatPullRequestEvent(eventObj) {
   console.log(`Ignoring pull request event ${eventObj.id} (${eventObj.payload.action})`);
 }
 
-function formatPullRequestOpenedEvent(eventObj) {
-  const title = truncateString(eventObj.payload.pull_request.title, 150);
 
+function formatPullRequestOpenedEvent(eventObj) {
+  const title = truncateString(eventObj.payload.pull_request.title, 100);
   const message = new MessageBuilder()
     .setColor('#009800')
-    .setTitle(`[${eventObj.repo.name}] Pull request opened: #${eventObj.payload.pull_request.number} ${title}`)
+    .setTitle(`🚀 Pull Request opened: #${eventObj.payload.pull_request.number} - **${title}**`)
     .setAuthor(eventObj.actor.login, eventObj.actor.avatar_url, `${BASE}/${eventObj.actor.login}`)
     .setURL(eventObj.payload.pull_request.html_url)
-    .setDescription(truncateString(eventObj.payload.pull_request.body, 500));
+    .setDescription(truncateString(eventObj.payload.pull_request.body, 200))
+    .setTimestamp()
+    .setFooter(`Submitted by ${eventObj.actor.login}`);
 
   return message;
 }
 
 function formatPullRequestClosedEvent(eventObj) {
-  const title = truncateString(eventObj.payload.pull_request.title, 150);
-
+  const title = truncateString(eventObj.payload.pull_request.title, 100);
   const message = new MessageBuilder()
-    .setTitle(`[${eventObj.repo.name}] Pull request closed: #${eventObj.payload.pull_request.number} ${title}`)
+    .setColor('#e1e1e1')
+    .setTitle(`🔒 Pull Request closed: #${eventObj.payload.pull_request.number} - **${title}**`)
     .setAuthor(eventObj.actor.login, eventObj.actor.avatar_url, `${BASE}/${eventObj.actor.login}`)
-    .setURL(eventObj.payload.pull_request.html_url);
+    .setURL(eventObj.payload.pull_request.html_url)
+    .setTimestamp()
+    .setFooter(`Closed by ${eventObj.actor.login}`);
 
   return message;
 }
 
 function formatPullRequestReopenedEvent(eventObj) {
-  const title = truncateString(eventObj.payload.pull_request.title, 150);
-
+  const title = truncateString(eventObj.payload.pull_request.title, 100);
   const message = new MessageBuilder()
-    .setTitle(`[${eventObj.repo.name}] Pull request reopened: #${eventObj.payload.pull_request.number} ${title}`)
+    .setColor('#f7b824')
+    .setTitle(`🔄 Pull Request reopened: #${eventObj.payload.pull_request.number} - **${title}**`)
     .setAuthor(eventObj.actor.login, eventObj.actor.avatar_url, `${BASE}/${eventObj.actor.login}`)
-    .setURL(eventObj.payload.pull_request.html_url);
+    .setURL(eventObj.payload.pull_request.html_url)
+    .setTimestamp()
+    .setFooter(`Reopened by ${eventObj.actor.login}`);
 
   return message;
 }
@@ -195,16 +207,20 @@ export function formatPullRequestReviewEvent(eventObj) {
     return;
   }
 
-  const title = truncateString(eventObj.payload.pull_request.title, 150);
+  const title = truncateString(eventObj.payload.pull_request.title, 100);
+  const reviewType = eventObj.payload.review.state === 'approved' ? '✅ Approved' : '❌ Request changes';
 
   const message = new MessageBuilder()
-    .setTitle(`[${eventObj.repo.name}] Pull request review submitted: #${eventObj.payload.pull_request.number} ${title}`)
+    .setTitle(`📝 Pull request review ${reviewType}: #${eventObj.payload.pull_request.number} - **${title}**`)
     .setAuthor(eventObj.actor.login, eventObj.actor.avatar_url, `${BASE}/${eventObj.actor.login}`)
     .setURL(eventObj.payload.review.html_url)
-    .setDescription(truncateString(eventObj.payload.review.body, 500));
+    .setDescription(truncateString(eventObj.payload.review.body, 200))
+    .setTimestamp()
+    .setFooter(`Review submitted by ${eventObj.actor.login}`);
 
   return message;
 }
+
 
 export function formatPullRequestReviewCommentEvent(eventObj) {
   if (eventObj.payload.action !== 'created') {
@@ -280,9 +296,14 @@ function formatTagCreatedEvent(eventObj) {
 }
 
 function formatBranchCreatedEvent(eventObj) {
+  const branchName = eventObj.payload.ref;
   const message = new MessageBuilder()
-    .setTitle(`[${eventObj.repo.name}] New branch created: ${eventObj.payload.ref}`)
-    .setAuthor(eventObj.actor.login, eventObj.actor.avatar_url, `${BASE}/${eventObj.actor.login}`);
+    .setColor('#36b37e') // Green color for new branch
+    .setTitle(`🌿 New branch created: **${branchName}**`)
+    .setAuthor(eventObj.actor.login, eventObj.actor.avatar_url, `${BASE}/${eventObj.actor.login}`)
+    .setURL(`${BASE}/${eventObj.repo.name}/tree/${branchName}`)
+    .setTimestamp()
+    .setFooter(`Branch created by ${eventObj.actor.login}`);
 
   return message;
 }

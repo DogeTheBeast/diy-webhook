@@ -15,6 +15,7 @@ const configFile = JSON.parse(fs.readFileSync('./config.json'));
 
 const octokit = new Octokit({
   auth: configFile.githubAuth
+  //baseUrl: "https://github.students.cs.ubc.ca/api/v3"
 });
 const hook = new Webhook(configFile.webhookUrl);
 
